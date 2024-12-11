@@ -1,0 +1,29 @@
+// Define the pin numbers
+const int inputPin = 2;    // Pin for the digital input (e.g., a button)
+const int ledPin = 13;      // Pin for the LED output
+
+void setup() {
+  // Initialize the input pin and the LED pin
+  pinMode(inputPin, INPUT);   // Set the input pin as INPUT
+  pinMode(ledPin, OUTPUT);    // Set the LED pin as OUTPUT
+
+  // Start serial communication
+  Serial.begin(9600);         // Initialize serial communication at 9600 baud rate
+}
+
+void loop() {
+  // Read the state of the input pin
+  int inputState = digitalRead(inputPin);
+
+  if(inputState>0){
+  // Set the LED state to the same as the input state
+  digitalWrite(ledPin, inputState);
+
+  // Print the input state to the Serial Monitor
+  Serial.print("Input state: ");
+  Serial.println(inputState);
+  delay(50);
+    digitalWrite(ledPin, 0);
+
+  }
+}

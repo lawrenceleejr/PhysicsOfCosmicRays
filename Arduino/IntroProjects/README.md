@@ -1,0 +1,1 @@
+Put your first projects that are exploratory and about learning the basics here in `Arduino/IntroProjects/`. As we start to build up the codebase for the final project, that will go outside of this folder and will be a collaborative coding project.

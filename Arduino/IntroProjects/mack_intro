@@ -1,0 +1,56 @@
+// The intention of this code is that when the button is pushed, the Ardunuo Uno is live for 30 seconds, and then the potentiometer allows for 
+// brightness to be changed
+
+#include <FastLED.h>
+
+#define NUM_LEDS 8                 // Number of LEDs in your strip
+#define DATA_PIN 12                // Pin for LED strip data line
+#define BUTTON_PIN 2               // Pin for the button
+#define POT_PIN A0                 // Analog pin for potentiometer
+
+CRGB leds[NUM_LEDS];
+uint8_t gHue = 0;  // base hue for rainbow
+
+unsigned long rainbowStartTime = 0;
+bool rainbowActive = false;
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);   // Button with internal pull-up
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(50);  
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Read potentiometer (0–1023) and map to brightness (0–255)
+  int potValue = analogRead(POT_PIN);
+  int brightness = map(potValue, 0, 1023, 0, 255); 
+  FastLED.setBrightness(brightness);
+
+  // Check button press
+  if (digitalRead(BUTTON_PIN) == LOW && !rainbowActive) {
+    rainbowActive = true;
+    rainbowStartTime = millis();   // record start time
+  }
+
+  // If rainbow is active, animate for 5 seconds
+  if (rainbowActive) {
+    unsigned long elapsed = millis() - rainbowStartTime;
+
+    if (elapsed < 5000) {  // run rainbow for 5 seconds
+      fill_rainbow(leds, NUM_LEDS, gHue, 7);
+      FastLED.show();
+      gHue++;  // animate colors
+    } else {
+      rainbowActive = false;  // stop rainbow
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      FastLED.show();
+    }
+  } else {
+    // LEDs stay off until button pressed again
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
+  }
+
+  delay(30);  // smooth animation
+}

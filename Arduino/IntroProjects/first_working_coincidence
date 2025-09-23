@@ -1,0 +1,73 @@
+#include <FastLED.h>
+
+#define NUM_LEDS 60
+#define DATA_PIN 12
+#define TRIGGER_PIN 2
+
+CRGB leds[NUM_LEDS];
+
+// ---- Define 5-color gradient palette ----
+DEFINE_GRADIENT_PALETTE(myPalette_gp) {
+  0,   0xFF, 0xCA, 0x56,  // Yellow (#FFCA56)
+  64,  0xE3, 0x78, 0x34,  // Orange (#E37834)
+  128, 0x99, 0x4B, 0x23,  // Brown  (#994B23)
+  192, 0x24, 0x4F, 0x60,  // Teal   (#244F60)
+  255, 0x13, 0x31, 0x40   // Navy   (#133140)
+};
+
+CRGBPalette16 customPalette = myPalette_gp;
+
+// ---- Animation parameters ----
+unsigned long animationStart = 0;
+unsigned long animationDuration = 500; // 0.5 seconds
+bool animating = false;
+bool lastButtonState = HIGH; // assumes INPUT_PULLUP
+const unsigned long frameDelay = 15; // ~15ms per frame (~66 FPS)
+
+void setup() {
+  pinMode(TRIGGER_PIN, INPUT_PULLUP); // button to GND
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(255);
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.show();
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // ---- Button edge detection ----
+  bool buttonState = digitalRead(TRIGGER_PIN);
+  if (lastButtonState == HIGH && buttonState == LOW && !animating) {
+    animating = true;
+    animationStart = now;
+  }
+  lastButtonState = buttonState;
+
+  // ---- Animate if active ----
+  if (animating) {
+    unsigned long elapsed = now - animationStart;
+
+    if (elapsed >= animationDuration) {
+      // Animation finished
+      animating = false;
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      FastLED.show();
+    } else {
+      float progress = float(elapsed) / animationDuration;
+      uint8_t phaseShift = progress * 255; // moves color + brightness
+
+      for (int i = 0; i < NUM_LEDS; i++) {
+        uint8_t x = map(i, 0, NUM_LEDS - 1, 0, 255);
+
+        // Sine-wave brightness
+        uint8_t brightness = sin8(x - phaseShift);
+
+        // Color + brightness together
+        leds[i] = ColorFromPalette(customPalette, x + phaseShift, brightness, LINEARBLEND);
+      }
+
+      FastLED.show();
+      delay(frameDelay); // smooth animation
+    }
+  }
+}

@@ -1,0 +1,50 @@
+#include <FastLED.h>
+
+#define NUM_LEDS 8                 // Number of LEDs in your strip
+#define DATA_PIN 12                 // Pin for LED strip data line
+#define BUTTON_PIN 2                // Pin for the button
+#define POT_HUE A0                  // Potentiometer for hue
+#define POT_BRIGHT A1               // Potentiometer for brightness
+
+CRGB leds[NUM_LEDS];
+bool ledsOn = false;   // toggle state for button
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);   // Button with internal pull-up
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.clear();
+  FastLED.show();
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Button toggles LEDs on/off
+  static bool lastButtonState = HIGH;
+  bool buttonState = digitalRead(BUTTON_PIN);
+
+  if (lastButtonState == HIGH && buttonState == LOW) {  
+    ledsOn = !ledsOn;   // toggle on/off
+  }
+  lastButtonState = buttonState;
+
+  // Read hue potentiometer (0–1023 → 0–255)
+  int potHueValue = analogRead(POT_HUE);
+  uint8_t hue = map(potHueValue, 0, 1023, 0, 255);
+
+  // Read brightness potentiometer (0–1023 → 0–255)
+  int potBrightValue = analogRead(POT_BRIGHT);
+  uint8_t brightness = map(potBrightValue, 0, 1023, 0, 255);
+
+  FastLED.setBrightness(brightness);
+
+  if (ledsOn) {
+    // Show color based on hue pot
+    fill_solid(leds, NUM_LEDS, CHSV(hue, 255, 255));
+  } else {
+    // LEDs off
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+  }
+
+  FastLED.show();
+  delay(20);  // small delay for stability
+}

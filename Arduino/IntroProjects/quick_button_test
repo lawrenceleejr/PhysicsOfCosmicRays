@@ -1,0 +1,18 @@
+
+
+#define TRIGGER_PIN 2
+
+void setup() {
+  pinMode(TRIGGER_PIN, INPUT_PULLUP);
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  if (digitalRead(TRIGGER_PIN) == LOW) {
+    digitalWrite(LED_BUILTIN, HIGH); // turn on built-in LED when pressed
+  } else {
+    digitalWrite(LED_BUILTIN, LOW);
+  }
+}
+
+/ for when you feel like your button isn't working...

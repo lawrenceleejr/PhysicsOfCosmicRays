@@ -1,97 +1,213 @@
 #include <Adafruit_NeoPixel.h>
 
-#define BUTTON_OUT 6
+// --- Pin assignments ---
+#define BUTTON_PIN 2
+#define RGBW_PIN   11
+#define RGB_PIN    12
+#define PIN3       3   // Opacity Film
+#define PIN4       4   // Spotlight Relay
+#define TRIGPIN    9
+#define ECHOPIN    10
 
-#define BUTTON_LED 12
-#define BUTTON_LED_COUNT 24
+// --- Config ---
+#define NUM_LEDS        24
+#define DISTANCE_THRESH 75   // cm, user detected
+#define INACTIVITY_TIME 5000 // ms before reset if user leaves
+#define HOLD_TIME       1000 // Relay low duration
+#define PULSE_DELAY     10
 
-#define SLIDER_IN 1
-#define SLIDER_OUT 0
+// --- Phase States ---
+enum Phase {
+  RESET_PHASE,
+  PHASE_ONE,
+  PHASE_TWO
+};
 
-#define SLIDER_LED 11 
-#define SLIDER_LED_COUNT 16
+Phase currentPhase = RESET_PHASE;
 
+// --- NeoPixels ---
+Adafruit_NeoPixel ringRGBW(NUM_LEDS, RGBW_PIN, NEO_GRBW + NEO_KHZ800);
+Adafruit_NeoPixel ringRGB(NUM_LEDS,  RGB_PIN,  NEO_GRB  + NEO_KHZ800);
 
-int sliderValue;
-int buttonValue;
+// --- Timers & Variables ---
+unsigned long lastInteractionTime = 0;
+unsigned long now = 0;
 
-String message;
+int distance = 9999;
+int lastDistance = 9999;
+unsigned long lastPing = 0;
+const unsigned long pingInterval = 100;
 
-// Create the NeoPixel object (RGBW mode)
-Adafruit_NeoPixel ring(BUTTON_LED_COUNT, BUTTON_LED, NEO_GRBW + NEO_KHZ800);
-Adafruit_NeoPixel strip(SLIDER_LED_COUNT, SLIDER_LED, NEO_GRBW + NEO_KHZ800);
+int buttonState = HIGH;
+int lastButtonState = HIGH;
+bool userPresent = false;
 
+// --- For pulsing logic ---
+int brightness = 0;
+int fadeAmount = 3;
+unsigned long lastPulseTime = 0;
 
+// --- Placeholder for fader ---
+int faderValue = 0;
+
+// -------------------------------
+// SETUP
+// -------------------------------
 void setup() {
-    ring.begin();
-    ring.show();  // Initialize all pixels to 'off'
-    strip.begin();
-    strip.show();  // Initialize all pixels to 'off'
-    Serial.begin(9600);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(PIN3, OUTPUT);
+  pinMode(PIN4, OUTPUT);
+  digitalWrite(PIN4, HIGH); // Relay idle HIGH (off)
 
-    pinMode(11, OUTPUT);
-    pinMode(12, OUTPUT);
+  ringRGBW.begin();
+  ringRGB.begin();
+  ringRGBW.show();
+  ringRGB.show();
+
+  pinMode(TRIGPIN, OUTPUT);
+  pinMode(ECHOPIN, INPUT);
+
+  Serial.begin(9600);
 }
 
+// -------------------------------
+// LOOP
+// -------------------------------
 void loop() {
-    sliderValue = analogRead(SLIDER_OUT);
-    buttonValue = digitalRead(BUTTON_OUT);
+  now = millis();
 
-    message = String(sliderValue) + ", " + String(buttonValue);
-    Serial.println(message);
+  // --- Update Distance (smooth reading) ---
+  if (now - lastPing >= pingInterval) {
+    lastPing = now;
+    lastDistance = distance;
+    distance = readDistance();
+  }
 
+  userPresent = (distance < DISTANCE_THRESH);
 
-    if (buttonValue == 1) {
-        for (int i = 0; i < BUTTON_LED_COUNT; i++) {
-            ring.setPixelColor(i, ring.Color(218, 165, float(sliderValue)/1005.*255, 0));
-        }  
+  // --- Update Button ---
+  buttonState = digitalRead(BUTTON_PIN);
 
-        for (int i = 0; i < SLIDER_LED_COUNT; i++) {
-            strip.setPixelColor(i, strip.Color(218, 165, 32));  // WS2812 = RGB only
-        }
+  // --- Phase Logic ---
+  switch (currentPhase) {
 
-        digitalWrite(11, 1);
-        digitalWrite(12, 1);
-    } else {
-        for (int i = 0; i < BUTTON_LED_COUNT; i++) {
-            ring.setPixelColor(i, ring.Color(0, 0, 0, 0));
-        }  
+    // ==========================
+    // RESET PHASE (idle)
+    // ==========================
+    case RESET_PHASE:
+      // Everything off
+      turnOffAll();
 
-        for (int i = 0; i < SLIDER_LED_COUNT; i++) {
-            strip.setPixelColor(i, strip.Color(0, 0, 0));  // WS2812 = RGB only
-        }
-        digitalWrite(11, 0);
-        digitalWrite(12, 0);
-    }
+      // Transition: user detected
+      if (userPresent) {
+        currentPhase = PHASE_ONE;
+        Serial.println("P1");
+        lastInteractionTime = now;
+        brightness = 0;
+      }
+      break;
 
-    strip.show();
-    ring.show();
-    // delay(10);
+    // ==========================
+    // PHASE ONE (pulsing lights)
+    // ==========================
+    case PHASE_ONE:
+
+      if (now - lastPulseTime >= PULSE_DELAY) {
+        lastPulseTime = now;
+        brightness += fadeAmount;
+        if (brightness <= 0 || brightness >= 255) fadeAmount = -fadeAmount;
+
+        setAllColor(brightness, brightness, brightness / 4);
+      }
+
+      Serial.print(userPresent);
+      Serial.print(", ");
+      Serial.print(buttonState);
+      Serial.print(", ");
+      Serial.println(faderValue);
+
+      // Record activity
+      if (userPresent) lastInteractionTime = now;
+
+      // Transition: button pressed -> Phase 2
+      if (buttonState == LOW && lastButtonState == HIGH) {
+        currentPhase = PHASE_TWO;
+        Serial.println("P2");
+        activateRelay();
+        lastInteractionTime = now;
+      }
+
+      // Transition: user leaves or inactivity
+      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
+        currentPhase = RESET_PHASE;
+        Serial.println("P0");
+      }
+
+      break;
+
+    // ==========================
+    // PHASE TWO (solid lights + relay)
+    // ==========================
+    case PHASE_TWO:
+      // Placeholder: LEDs solid color here later
+
+      // Ensure relay stays active for demonstration
+      if (now - lastInteractionTime > INACTIVITY_TIME && !userPresent) {
+        currentPhase = RESET_PHASE;
+        Serial.println("Return to Reset");
+      }
+
+      // Example future feature:
+      // if (now - phaseTwoStart > someTime) { changeButtonColor(); }
+
+      break;
+  }
+
+  lastButtonState = buttonState;
 }
 
-// void pulseRing(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
-//   // Fade in
-//   for (int brightness = 0; brightness <= 255; brightness++) {
-//     setRingColor(r, g, b, w, brightness);
-//     delay(10); // Adjust speed of pulsing
-//   }
-//   // Fade out
-//   for (int brightness = 255; brightness >= 0; brightness--) {
-//     setRingColor(r, g, b, w, brightness);
-//     delay(10);
-//   }
-// }
+// -------------------------------
+// FUNCTIONS
+// -------------------------------
 
-// void setRingColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w, int brightness) {
-//   // Scale color by brightness
-//   float scale = brightness / 255.0;
-//   uint8_t rAdj = r * scale;
-//   uint8_t gAdj = g * scale;
-//   uint8_t bAdj = b * scale;
-//   uint8_t wAdj = w * scale;
+int readDistance() {
+  digitalWrite(TRIGPIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIGPIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGPIN, LOW);
 
-//   for (int i = 0; i < BUTTON_LED_COUNT; i++) {
-//     ring.setPixelColor(i, ring.Color(rAdj, gAdj, bAdj, wAdj));
-//   }
-//   ring.show();
-// }
+  long duration = pulseIn(ECHOPIN, HIGH, 30000);
+  int cm = duration * 0.034 / 2;
+  return cm;
+}
+
+void turnOffAll() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    ringRGBW.setPixelColor(i, 0, 0, 0, 0);
+    ringRGB.setPixelColor(i, 0, 0, 0);
+  }
+  ringRGBW.show();
+  ringRGB.show();
+  digitalWrite(PIN4, HIGH); // relay off
+}
+
+void activateRelay() {
+  digitalWrite(PIN4, LOW); // Relay ON
+  delay(HOLD_TIME);
+  digitalWrite(PIN4, HIGH); // Relay OFF again if desired
+}
+
+void setAllColor(uint8_t blueBrightness, uint8_t blueRGBW, uint8_t whiteLevel) {
+  // RGBW ring (blue + subtle white)
+  for (int i = 0; i < NUM_LEDS; i++) {
+    ringRGBW.setPixelColor(i, ringRGBW.Color(0, 0, blueRGBW, whiteLevel));
+  }
+  // RGB ring (blue only)
+  for (int i = 0; i < NUM_LEDS; i++) {
+    ringRGB.setPixelColor(i, ringRGB.Color(0, 0, blueBrightness));
+  }
+  ringRGBW.show();
+  ringRGB.show();
+}
+

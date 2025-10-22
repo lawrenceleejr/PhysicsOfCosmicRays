@@ -30,36 +30,40 @@ Phase currentPhase = RESET_PHASE;
 Adafruit_NeoPixel ringRGBW(NUM_LEDS, RGBW_PIN, NEO_GRBW + NEO_KHZ800);
 Adafruit_NeoPixel ringRGB(NUM_LEDS,  RGB_PIN,  NEO_GRB  + NEO_KHZ800);
 
-// --- Timers ---
+// --- Timers & Variables ---
 unsigned long lastInteractionTime = 0;
 unsigned long now = 0;
-unsigned long lastPulseTime = 0;
-unsigned long phaseStartTime = 0;
 
-// --- Distance sensor vars ---
 int distance = 9999;
+int lastDistance = 9999;
 unsigned long lastPing = 0;
 const unsigned long pingInterval = 100;
-bool userPresent = false;
 
-// --- Button ---
 int buttonState = HIGH;
 int lastButtonState = HIGH;
+bool userPresent = false;
 
-// --- Pulse variables ---
+// --- For pulsing logic ---
 int brightness = 0;
 int fadeAmount = 3;
+unsigned long lastPulseTime = 0;
 
-// --- Phase control ---
-bool blueInitialized = false;
-bool redLocked = false;
+// --- Placeholder for fader ---
+int faderValue = 0;
 
-// -------------------- SETUP --------------------
+// -------------------------------
+// SETUP
+// -------------------------------
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(PIN3, OUTPUT);
   pinMode(PIN4, OUTPUT);
-  digitalWrite(PIN4, HIGH); // Relay off
+  digitalWrite(PIN4, HIGH); // Relay idle HIGH (off)
+
+  ringRGBW.begin();
+  ringRGB.begin();
+  ringRGBW.show();
+  ringRGB.show();
 
   pinMode(TRIGPIN, OUTPUT);
   pinMode(ECHOPIN, INPUT);

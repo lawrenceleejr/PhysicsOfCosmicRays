@@ -112,6 +112,8 @@ void loop() {
     // ==========================
     case PHASE_ONE:
 
+    digitalWrite(PIN4, LOW);
+
       if (now - lastPulseTime >= PULSE_DELAY) {
         lastPulseTime = now;
         brightness += fadeAmount;
@@ -146,22 +148,42 @@ void loop() {
       break;
 
     // ==========================
-    // PHASE TWO (solid lights + relay)
+    // PHASE TWO (solid blue → fade to red)
     // ==========================
-    case PHASE_TWO:
-      // Placeholder: LEDs solid color here later
+    case PHASE_TWO: {
+      static bool initialized = false;
+      static unsigned long phaseStartTime = 0;
+      const unsigned long fadeDelay = 20;       // controls smoothness
+      
+      digitalWrite(PIN4,LOW);
 
-      // Ensure relay stays active for demonstration
-      if (now - lastInteractionTime > INACTIVITY_TIME && !userPresent) {
-        currentPhase = RESET_PHASE;
-        Serial.println("Return to Reset");
-      }
+    if (!initialized) {
+      // Step 1: turn solid blue immediately
+      for (int i = 0; i < NUM_LEDS; i++) {
+      ringRGB.setPixelColor(i, ringRGB.Color(0, 0, 255));
+      ringRGBW.setPixelColor(i, ringRGBW.Color(0, 0, 255, 0));
+    }
 
-      // Example future feature:
-      // if (now - phaseTwoStart > someTime) { changeButtonColor(); }
-
-      break;
+    ringRGB.show();
+    ringRGBW.show();
+    phaseStartTime = now;
+    initialized = true;
   }
+
+  // Step 2: after 30 seconds, fade to red
+  if (initialized && (now - phaseStartTime > holdBlueTime)) {
+    fadeColor(0, 0, 255, 255, 0, 0, 100, fadeDelay);  // from blue → red
+    initialized = false; // reset for next use
+  }
+
+  // Return to reset if user leaves
+  if (now - lastInteractionTime > INACTIVITY_TIME && !userPresent) {
+    currentPhase = RESET_PHASE;
+    Serial.println("P0");
+  }
+
+  break;
+}
 
   lastButtonState = buttonState;
 }

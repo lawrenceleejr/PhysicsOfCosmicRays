@@ -4,13 +4,13 @@
 #define NUM_STRIPS 2
 
 // SCORPIO pins 0–7
-uint8_t pins[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+int8_t pins[8] = { 16, 17, 18, 19, 20, 21, 22, 23 };
 Adafruit_NeoPXL8 leds(NUM_LEDS, pins, NEO_GRB);
 
 // Input pins
-#define PIN_TRIGGER_WAVE  2
-#define PIN_TOP_PULSE     3
-#define PIN_BOTTOM_PULSE  4
+#define PIN_TRIGGER_WAVE  9
+#define PIN_TOP_PULSE     10
+#define PIN_BOTTOM_PULSE  11
 
 // ---------------------------------------------------------------------------
 // Base Effect Class
@@ -226,16 +226,21 @@ public:
     uint32_t now = millis();
 
     // Trigger checks (all non-blocking, all can overlap)
-    if (digitalRead(PIN_TRIGGER_WAVE) == HIGH) {
+    if (digitalRead(PIN_TRIGGER_WAVE) == LOW) {
       wave.trigger(now);
       globalPulse.trigger(now);
+      Serial.println("X");
     }
 
-    if (digitalRead(PIN_TOP_PULSE) == HIGH)
+    if (digitalRead(PIN_TOP_PULSE) == LOW){
       topPulse.trigger(now);
+      Serial.println("A");
+    }
 
-    if (digitalRead(PIN_BOTTOM_PULSE) == HIGH)
+    if (digitalRead(PIN_BOTTOM_PULSE) == LOW){
       bottomPulse.trigger(now);
+      Serial.println("B");
+    }
 
     // Frame render
     leds.clear();
@@ -255,10 +260,11 @@ EffectController controller;
 // Arduino Entry Points
 // ---------------------------------------------------------------------------
 void setup() {
-  pinMode(PIN_TRIGGER_WAVE, INPUT);
-  pinMode(PIN_TOP_PULSE, INPUT);
-  pinMode(PIN_BOTTOM_PULSE, INPUT);
+  pinMode(PIN_TRIGGER_WAVE, INPUT_PULLUP);
+  pinMode(PIN_TOP_PULSE, INPUT_PULLUP);
+  pinMode(PIN_BOTTOM_PULSE, INPUT_PULLUP);
   controller.begin();
+  Serial.begin(9600);
 }
 
 void loop() {

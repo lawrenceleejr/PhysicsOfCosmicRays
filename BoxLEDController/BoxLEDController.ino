@@ -227,19 +227,19 @@ public:
 
     // Trigger checks (all non-blocking, all can overlap)
     if (digitalRead(PIN_TRIGGER_WAVE) == LOW) {
+      Serial.println("X");
       wave.trigger(now);
       globalPulse.trigger(now);
-      Serial.println("X");
     }
 
     if (digitalRead(PIN_TOP_PULSE) == LOW){
-      topPulse.trigger(now);
       Serial.println("A");
+      topPulse.trigger(now);
     }
 
     if (digitalRead(PIN_BOTTOM_PULSE) == LOW){
-      bottomPulse.trigger(now);
       Serial.println("B");
+      bottomPulse.trigger(now);
     }
 
     // Frame render
@@ -260,11 +260,18 @@ EffectController controller;
 // Arduino Entry Points
 // ---------------------------------------------------------------------------
 void setup() {
-  pinMode(PIN_TRIGGER_WAVE, INPUT_PULLUP);
+  // pinMode(PIN_TRIGGER_WAVE, INPUT_PULLUP);
   pinMode(PIN_TOP_PULSE, INPUT_PULLUP);
   pinMode(PIN_BOTTOM_PULSE, INPUT_PULLUP);
+  pinMode(PIN_TRIGGER_WAVE, INPUT);
+  // pinMode(PIN_TOP_PULSE, INPUT);
+  // pinMode(PIN_BOTTOM_PULSE, INPUT);  
   controller.begin();
   Serial.begin(9600);
+  while (!Serial) {
+    ; // Wait for Serial to connect (needed for native USB)
+  }
+  Serial.println("Hello from Adafruit Scorpio!");
 }
 
 void loop() {

@@ -45,6 +45,7 @@ bool redLocked = false;
 bool blueInitialized = false;
 
 int distance = 9999;
+int potValue = 0;
 int brightness = 0;
 int fadeAmount = 3;
 int lastButtonState = HIGH;
@@ -75,7 +76,6 @@ void setup() {
   ringRGB.show();
   ringRGBW.show();
 
-  Serial.println("System Ready.");
 }
 
 // ==========================================================
@@ -84,6 +84,7 @@ void setup() {
 void loop() {
   now = millis();
   int buttonState = digitalRead(BUTTON_PIN);
+  potValue = smoothAnalogRead(POT_PIN);
 
   // --- Distance Sensor Update ---
   if (now - lastPing > 100) {
@@ -94,9 +95,12 @@ void loop() {
   if (userPresent) lastInteractionTime = now;
 
   // --- Serial Debug Output ---
-  Serial.print("Phase: "); Serial.print(currentPhase);
-  Serial.print(" | Distance: "); Serial.print(distance);
-  Serial.println();
+  Serial.print(buttonState);
+  Serial.print(",");
+  Serial.print(potValue);
+  Serial.print(",");
+  Serial.println(distance);
+
 
   // --- Phase Logic ---
   switch (currentPhase) {
@@ -170,7 +174,6 @@ void loop() {
   // Read pot and scale brightness
   int potValue = smoothAnalogRead(POT_PIN);
   int scaledBrightness = map(potValue, 20, 1023, 255, 0);
-  Serial.print("Pot: "); Serial.println(potValue);
 
 
   // Apply scaled brightness while keeping color proportions

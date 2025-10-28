@@ -1,10 +1,10 @@
-#include <Control_Surface.h>
-USBMIDI_Interface midi;
+// #include <Control_Surface.h>
+// USBMIDI_Interface midi;
 
-#define COINCIDENCE_IN 3
+#define X_IN 3
 #define A_IN 4
 #define B_IN 5
-#define COINCIDENCE_OUT 11
+#define X_OUT 7
 #define A_OUT 12
 #define B_OUT 13
 
@@ -18,15 +18,15 @@ USBMIDI_Interface midi;
 // bool aNoteActive;
 // bool bNoteActive;
 
-int coincidenceState;
+int xState;
 int aState;
 int bState;
 
 void setup() {
-  Control_Surface.begin();
+  // Control_Surface.begin();
   // Serial.begin(9600);
-  pinMode(COINCIDENCE_IN, INPUT_PULLUP);
-  pinMode(COINCIDENCE_OUT, OUTPUT);
+  pinMode(X_IN, INPUT_PULLUP);
+  pinMode(X_OUT, OUTPUT);
   pinMode(A_IN, INPUT_PULLUP);
   pinMode(A_OUT, OUTPUT);
   pinMode(B_IN, INPUT_PULLUP);
@@ -34,15 +34,15 @@ void setup() {
 }
 
 void loop() {
-  coincidenceState = digitalRead(COINCIDENCE_IN);
+  xState = digitalRead(X_IN);
   // aState = digitalRead(A_IN);
   // bState = digitalRead(B_IN);
 
-  if (coincidenceState == 1) {
-    midi.sendNoteOn(Channel_4, 127);
-    digitalWrite(COINCIDENCE_OUT, 1);
-    midi.sendNoteOff(Channel_4, 127);
-    digitalWrite(COINCIDENCE_OUT, 0);
+  if (xState == 1) {
+    // midi.sendNoteOn(Channel_4, 127);
+    digitalWrite(X_OUT, 0);
+    // midi.sendNoteOff(Channel_4, 127);
+    digitalWrite(X_OUT, 1);
     // Serial.println("COINC ON");
     // coincidenceNoteBegin = millis();
     // coincidenceNoteActive = 1;

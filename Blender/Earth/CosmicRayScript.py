@@ -1,14 +1,37 @@
 import bpy
 import csv
 from mathutils import Vector
+from math import sin, cos, radians
+import numpy as np
 
 PYTHIA_DATA_FOLDER = "/Users/devlin/Desktop/PhysicsOfCosmicRays/Blender/Earth/Pythia"
+
+# Spherical to Cartesian
+def sph_vec(r, theta_deg, phi_deg):
+    th, ph = radians(theta_deg), radians(phi_deg)
+    return Vector((
+        r * sin(ph) * cos(th),
+        r * sin(ph) * sin(th),
+        r * cos(ph)
+    ))
+
+# ranges
+R_RANGE     = (1.1, 1.4)   # r_min, r_max
+THETA_RANGE = (0.0, 360.0) # theta_min, 
+PHI_RANGE   = (45.0, 85.0) # (≠ 90)
+
+def rand_origin(r_rng, th_rng, phi_rng):
+    r  = np.random.uniform(*r_rng)
+    th = np.random.uniform(*th_rng)
+    ph = np.random.uniform(*phi_rng)
+    return sph_vec(r, th, ph)
+
+ORIGIN_OFFSET = rand_origin(R_RANGE, THETA_RANGE, PHI_RANGE)
 EVENT_NUMBER = 1
 SCALE = 0.001
 TRACK_LENGTH_SCALE = 1
 BEAM_FRAMES = 30
 ANIMATION_SPEED = 0.01
-ORIGIN_OFFSET = Vector((0, 0, 1.03))
 
 def get_color_from_time(time_fraction):
     if time_fraction < 0.2:
@@ -35,7 +58,7 @@ bpy.context.scene.collection.children.link(collection)
 
 beam_curve = bpy.data.curves.new("IncomingRay", 'CURVE')
 beam_curve.dimensions = '3D'
-beam_curve.bevel_depth = 0.001
+beam_curve.bevel_depth = 0.01
 beam_curve.bevel_resolution = 4
 
 spline = beam_curve.splines.new('POLY')
@@ -53,7 +76,7 @@ nodes.clear()
 emission = nodes.new('ShaderNodeEmission')
 output = nodes.new('ShaderNodeOutputMaterial')
 emission.inputs['Color'].default_value = (1.0, 0.2, 0.2, 1.0)
-emission.inputs['Strength'].default_value = 1000
+emission.inputs['Strength'].default_value = 100
 beam_mat.node_tree.links.new(emission.outputs[0], output.inputs[0])
 beam.data.materials.append(beam_mat)
 
@@ -84,6 +107,8 @@ with open(filepath, 'r') as f:
             
             direction = end_orig - start
             end = start + direction * TRACK_LENGTH_SCALE
+            
+            
             
             if direction.length > 0.01 and direction.z <= 0:
                 t_start = float(row['t_start'])
@@ -134,7 +159,7 @@ for i, track in enumerate(tracks):
     emission = nodes.new('ShaderNodeEmission')
     output = nodes.new('ShaderNodeOutputMaterial')
     emission.inputs['Color'].default_value = (*track['color'], 1.0)
-    emission.inputs['Strength'].default_value = 100
+    emission.inputs['Strength'].default_value = 2.5
     
     mat.node_tree.links.new(emission.outputs[0], output.inputs[0])
     obj.data.materials.append(mat)

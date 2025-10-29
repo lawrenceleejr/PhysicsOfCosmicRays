@@ -3,6 +3,9 @@ import csv
 from mathutils import Vector
 from math import sin, cos, radians
 import numpy as np
+import random
+import os
+import glob
 
 PYTHIA_DATA_FOLDER = "/Users/devlin/Desktop/PhysicsOfCosmicRays/Blender/Earth/Pythia"
 
@@ -16,9 +19,9 @@ def sph_vec(r, theta_deg, phi_deg):
     ))
 
 # ranges
-R_RANGE     = (1.1, 1.4)   # r_min, r_max
-THETA_RANGE = (0.0, 360.0) # theta_min, 
-PHI_RANGE   = (45.0, 85.0) # (≠ 90)
+R_RANGE     = (1.1, 1.05)   # ~1 is atmosphere
+THETA_RANGE = (0.0, 180.0) # 0-360 
+PHI_RANGE   = (15, 65) # 0-180
 
 def rand_origin(r_rng, th_rng, phi_rng):
     r  = np.random.uniform(*r_rng)
@@ -27,7 +30,14 @@ def rand_origin(r_rng, th_rng, phi_rng):
     return sph_vec(r, th, ph)
 
 ORIGIN_OFFSET = rand_origin(R_RANGE, THETA_RANGE, PHI_RANGE)
-EVENT_NUMBER = 1
+
+# Get a random CSV file from the folder
+csv_files = glob.glob(os.path.join(PYTHIA_DATA_FOLDER, "event_*.csv"))
+if not csv_files:
+    raise FileNotFoundError(f"No CSV files found in {PYTHIA_DATA_FOLDER}")
+filepath = random.choice(csv_files)
+print(f"Loading: {filepath}")
+
 SCALE = 0.001
 TRACK_LENGTH_SCALE = 1
 BEAM_FRAMES = 30
@@ -50,9 +60,6 @@ def get_color_from_time(time_fraction):
         t = (time_fraction - 0.8) / 0.2
         return (1.0, 0.7 - t * 0.7, 0.0)
 
-import os
-filepath = os.path.join(PYTHIA_DATA_FOLDER, f"event_{EVENT_NUMBER:04d}.csv")
-
 collection = bpy.data.collections.new("CosmicRay")
 bpy.context.scene.collection.children.link(collection)
 
@@ -63,7 +70,9 @@ beam_curve.bevel_resolution = 4
 
 spline = beam_curve.splines.new('POLY')
 spline.points.add(1)
-spline.points[0].co = (*(Vector((0, 0, 50)) + ORIGIN_OFFSET), 1)
+FAR = 50.0 # how far away the incoming cosmic ray goes out
+to_origin = (-ORIGIN_OFFSET).normalized() # points to origin 0,0,0
+spline.points[0].co = (*(ORIGIN_OFFSET - to_origin * FAR), 1)
 spline.points[1].co = (*ORIGIN_OFFSET, 1)
 
 beam = bpy.data.objects.new("IncomingRay", beam_curve)
@@ -79,15 +88,6 @@ emission.inputs['Color'].default_value = (1.0, 0.2, 0.2, 1.0)
 emission.inputs['Strength'].default_value = 100
 beam_mat.node_tree.links.new(emission.outputs[0], output.inputs[0])
 beam.data.materials.append(beam_mat)
-
-beam.hide_viewport = True
-beam.hide_render = True
-beam.keyframe_insert(data_path="hide_viewport", frame=1)
-beam.keyframe_insert(data_path="hide_render", frame=1)
-beam.hide_viewport = False
-beam.hide_render = False
-beam.keyframe_insert(data_path="hide_viewport", frame=BEAM_FRAMES)
-beam.keyframe_insert(data_path="hide_render", frame=BEAM_FRAMES)
 
 tracks = []
 with open(filepath, 'r') as f:
@@ -163,23 +163,3 @@ for i, track in enumerate(tracks):
     
     mat.node_tree.links.new(emission.outputs[0], output.inputs[0])
     obj.data.materials.append(mat)
-    
-    appear_frame = BEAM_FRAMES + int(track['t_start'] * ANIMATION_SPEED)
-    
-    obj.hide_viewport = True
-    obj.hide_render = True
-    obj.keyframe_insert(data_path="hide_viewport", frame=appear_frame - 1)
-    obj.keyframe_insert(data_path="hide_render", frame=appear_frame - 1)
-    
-    obj.hide_viewport = False
-    obj.hide_render = False
-    obj.keyframe_insert(data_path="hide_viewport", frame=appear_frame)
-    obj.keyframe_insert(data_path="hide_render", frame=appear_frame)
-
-last_frame = BEAM_FRAMES + int(max([t['t_start'] for t in tracks]) * ANIMATION_SPEED) + 50
-bpy.context.scene.frame_start = 1
-bpy.context.scene.frame_end = last_frame
-
-print(f"Animation complete: {len(tracks)} tracks")
-print(f"Track length scale: {TRACK_LENGTH_SCALE}x")
-print(f"Total frames: {last_frame}")

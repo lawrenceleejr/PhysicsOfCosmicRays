@@ -94,14 +94,23 @@ void loop() {
   userPresent = (distance < DISTANCE_THRESH);
   if (userPresent) lastInteractionTime = now;
 
-  // --- Serial Debug Output ---
+  // --- Serial Output ---
   Serial.print(buttonState);
   Serial.print(",");
   Serial.print(potValue);
   Serial.print(",");
   Serial.println(distance);
 
+// --- Serial Input ---
 
+if (Serial.available() > 0); {
+  char incomingByte = Serial.read();
+
+if (incomingByte == 'R'); {
+  currentPhase = RESET_PHASE;
+  Serial.println("P0");
+  }
+}
   // --- Phase Logic ---
   switch (currentPhase) {
 

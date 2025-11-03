@@ -1,87 +1,68 @@
-// #include <Control_Surface.h>
-// USBMIDI_Interface midi;
-
-#define X_IN 3
-#define A_IN 4
-#define B_IN 5
-#define X_OUT 7
+#define X_IN 3 // Leonardo hardware interrupts 2, 3, 7 aren't the same as on the LVDS reciever.
+#define A_IN 7 // Leonardo hardware interrupts.
+#define B_IN 2 // Leonardo hardware interrupts.
+#define X_OUT 8
 #define A_OUT 12
 #define B_OUT 13
 
-// unsigned long noteDuration = 5;
+volatile int xState;
+volatile int aState;
+volatile int bState;
 
-// unsigned long coincidenceNoteBegin;
-// unsigned long aNoteBegin;
-// unsigned long bNoteBegin;
+int delayDuration = 20; //ms
 
-// bool coincidenceNoteActive;
-// bool aNoteActive;
-// bool bNoteActive;
-
-int xState;
-int aState;
-int bState;
+// volatile int xCounter;
+// volatile int aCounter;
+// volatile int bCounter;
 
 void setup() {
-  // Control_Surface.begin();
-  // Serial.begin(9600);
   pinMode(X_IN, INPUT_PULLUP);
   pinMode(X_OUT, OUTPUT);
   pinMode(A_IN, INPUT_PULLUP);
   pinMode(A_OUT, OUTPUT);
   pinMode(B_IN, INPUT_PULLUP);
   pinMode(B_OUT, OUTPUT);
+  Serial.begin(9600);
+
+  attachInterrupt(digitalPinToInterrupt(X_IN), onX, RISING);
+  attachInterrupt(digitalPinToInterrupt(A_IN), onA, RISING);
+  attachInterrupt(digitalPinToInterrupt(B_IN), onB, RISING);
+}
+
+void onX() {
+  // xCounter++;
+  xState = 1;
+}
+void onA() {
+  // aCounter++;
+  aState = 1;
+}
+void onB() {
+  // bCounter++;
+  bState = 1;
 }
 
 void loop() {
-  xState = digitalRead(X_IN);
-  // aState = digitalRead(A_IN);
-  // bState = digitalRead(B_IN);
-
   if (xState == 1) {
-    // midi.sendNoteOn(Channel_4, 127);
     digitalWrite(X_OUT, 0);
-    // midi.sendNoteOff(Channel_4, 127);
+    delay(delayDuration);
+    Serial.println("X");
     digitalWrite(X_OUT, 1);
-    // Serial.println("COINC ON");
-    // coincidenceNoteBegin = millis();
-    // coincidenceNoteActive = 1;
   } 
-  // if (aState = 1) {
-  //   midi.sendNoteOn(Channel_2, 127);
-  //   digitalWrite(A_OUT, 1);
-  //   midi.sendNoteOff(Channel_2, 127);
-  //   digitalWrite(A_OUT, 0);
-  //   // Serial.println("A ON");
-  //   // aNoteBegin = millis();
-  //   // aNoteActive = 1;
-  // }
-  // if (bState = 1) {
-  //   midi.sendNoteOn(Channel_3, 127);
-  //   digitalWrite(B_OUT, 1);
-  //   midi.sendNoteOff(Channel_3, 127);
-  //   digitalWrite(B_OUT, 0);
-  //   // Serial.println("B ON");
-  //   // bNoteBegin = millis();
-  //   // bNoteActive = 1;
-  // }
+  if (aState == 1) {
+    digitalWrite(A_OUT, 0);
+    delay(delayDuration);
+    Serial.println("A");
+    digitalWrite(A_OUT, 1);
+  } 
+  if (bState == 1) {
+    digitalWrite(B_OUT, 0);
+    delay(delayDuration);
+    Serial.println("B");
+    digitalWrite(B_OUT, 1);
+  } 
 
-  // if ((coincidenceNoteActive) && (millis() - coincidenceNoteBegin >= noteDuration)) {
-  //   midi.sendNoteOff(Channel_1, 127);
-  //   digitalWrite(COINCIDENCE_OUT, 0);
-  //   // Serial.println("COINC OFF");
-  //   coincidenceNoteActive = 0;
-  // }
-  // if ((aNoteActive) && (millis() - aNoteBegin >= noteDuration)) {
-  //   midi.sendNoteOff(Channel_2, 127);
-  //   digitalWrite(A_OUT, 0);
-  //   // Serial.println("A OFF");
-  //   aNoteActive = 0;
-  // }
-  // if ((bNoteActive) && (millis() - bNoteBegin >= noteDuration)) {
-  //   midi.sendNoteOff(Channel_3, 127);
-  //   digitalWrite(B_OUT, 0);
-  //   // Serial.println("B OFF");
-  //   bNoteActive = 0;
-  // }
+  xState = 0;
+  aState = 0;
+  bState = 0;
 }

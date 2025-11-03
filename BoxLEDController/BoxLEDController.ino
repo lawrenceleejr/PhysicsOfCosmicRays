@@ -1,16 +1,39 @@
 #include <Adafruit_NeoPXL8.h>
 
-#define NUM_LEDS   100
+#define NUM_LEDS   150
 #define NUM_STRIPS 2
 
-// SCORPIO pins 0–7
-int8_t pins[8] = { 16, 17, 18, 19, 20, 21, 22, 23 };
-Adafruit_NeoPXL8 leds(NUM_LEDS, pins, NEO_GRB);
 
 // Input pins
 #define PIN_TRIGGER_WAVE  9
 #define PIN_TOP_PULSE     10
 #define PIN_BOTTOM_PULSE  11
+
+volatile bool triggerWaveFlag = false;
+volatile bool triggerTopFlag = false;
+volatile bool triggerBottomFlag = false;
+
+void onWaveTrigger() {
+  triggerWaveFlag = true;
+}
+
+void onTopTrigger() {
+  triggerTopFlag = true;
+}
+
+void onBottomTrigger() {
+  triggerBottomFlag = true;
+}
+
+// SCORPIO pins 0–7
+int8_t pins[8] = { 16, 17, 18, 19, 20, 21, 22, 23 };
+Adafruit_NeoPXL8 leds(NUM_LEDS, pins, NEO_GRB);
+
+int led = LED_BUILTIN;
+
+
+unsigned long lastSendTime = 0;
+const unsigned long timeout = 5000; // ms
 
 // ---------------------------------------------------------------------------
 // Base Effect Class
@@ -89,7 +112,7 @@ private:
   int count = 0;
 
   uint32_t delayBottom = 10; // ms
-  float decay = 1000.0;      // ms
+  float decay = 200.0;      // ms
 
 public:
   void trigger(uint32_t now) override {
@@ -177,7 +200,7 @@ public:
       if (t > duration) continue;
       float brightness = exp(-t / 100.0);
       for (int i = 0; i < NUM_LEDS; i++)
-        addPixel(i, brightness);
+        addPixel(i, brightness*0.1);
     }
     cleanup(now);
   }
@@ -224,23 +247,46 @@ public:
 
   void update() {
     uint32_t now = millis();
+    String serialIn = "";  //read until timeout
+
+    // if(Serial.available()) {     //wait for data available
+    //   String serialIn = Serial.readString();  //read until timeout
+    //   serialIn.trim();                        // remove any \r \n whitespace at the end of the String
+    // }
 
     // Trigger checks (all non-blocking, all can overlap)
-    if (digitalRead(PIN_TRIGGER_WAVE) == LOW) {
+    if (triggerWaveFlag || serialIn=="X") {
+      noInterrupts();
+      triggerWaveFlag = false;
+      interrupts();
       Serial.println("X");
+      delay(5);
       wave.trigger(now);
-      globalPulse.trigger(now);
+      // globalPulse.trigger(now);
     }
 
-    if (digitalRead(PIN_TOP_PULSE) == LOW){
+    if (triggerTopFlag || serialIn=="A"){
+      noInterrupts();
+      triggerTopFlag = false;
+      interrupts();
       Serial.println("A");
+      delay(5);
       topPulse.trigger(now);
     }
 
-    if (digitalRead(PIN_BOTTOM_PULSE) == LOW){
+    if (triggerBottomFlag || serialIn=="B"){
+      noInterrupts();
+      triggerBottomFlag = false;
+      interrupts();
       Serial.println("B");
+      delay(5);
       bottomPulse.trigger(now);
     }
+
+    // if (serialIn=="W"){
+    //   Serial.println("W");
+    //   bottomPulse.trigger(now);
+    // }
 
     // Frame render
     leds.clear();
@@ -260,20 +306,69 @@ EffectController controller;
 // Arduino Entry Points
 // ---------------------------------------------------------------------------
 void setup() {
+  pinMode(PIN_TOP_PULSE, INPUT);
+  pinMode(PIN_BOTTOM_PULSE, INPUT);
   // pinMode(PIN_TRIGGER_WAVE, INPUT_PULLUP);
-  pinMode(PIN_TOP_PULSE, INPUT_PULLUP);
-  pinMode(PIN_BOTTOM_PULSE, INPUT_PULLUP);
+  // pinMode(PIN_TOP_PULSE, INPUT);
+  // pinMode(PIN_BOTTOM_PULSE, INPUT);
   pinMode(PIN_TRIGGER_WAVE, INPUT);
   // pinMode(PIN_TOP_PULSE, INPUT);
   // pinMode(PIN_BOTTOM_PULSE, INPUT);  
+  attachInterrupt(digitalPinToInterrupt(PIN_TRIGGER_WAVE), onWaveTrigger, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_TOP_PULSE), onTopTrigger, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_BOTTOM_PULSE), onBottomTrigger, FALLING);
   controller.begin();
   Serial.begin(9600);
-  while (!Serial) {
-    ; // Wait for Serial to connect (needed for native USB)
-  }
-  Serial.println("Hello from Adafruit Scorpio!");
+  Serial.setTimeout(100);
+  // while (!Serial) {
+  //   ; // Wait for Serial to connect (needed for native USB)
+  // }
+  // delay(1000);
+  Serial.println("Connected to Adafruit Scorpio");
+  delay(5);
+
+  digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+  delay(500);                // wait for a half second
+  digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
 }
 
 void loop() {
   controller.update();
+  // if (!Serial||!Serial.dtr()){
+  //   // Serial.end();
+  //   // Serial.begin(9600);
+  //   while (!Serial) {
+  //     ; // Wait for Serial to connect (needed for native USB)
+  //   }
+  //   Serial.println("Reconnected");
+  //   delay(20);
+  // }
+  // delay(10000);
+
+  // if(Serial.available()) {     //wait for data available
+  //     String serialIn = Serial.readString();  //read until timeout
+  //     // serialIn.trim();                        // remove any \r \n whitespace at the end of the String
+  //     Serial.println(serialIn);
+  //     if(serialIn.indexOf("R") >= 0){
+  //         Serial.end();
+  //         Serial.begin(9600);
+  //     }
+  // }
+
+
+  if (millis() - lastSendTime > 100) {
+    if (Serial.dtr()) {          // Host is listening
+      Serial.println("PING");
+      lastSendTime = millis();
+    }
+  }
+
+  // Check if host has stopped reading for too long
+  if (millis() - lastSendTime > timeout) {
+    // Reset USB CDC stack
+    Serial.end();
+    delay(50);
+    Serial.begin(9600);
+    lastSendTime = millis(); // reset timer
+  }
 }

@@ -5,6 +5,9 @@
 #define A_OUT 12
 #define B_OUT 13
 
+#define GLOW_OUT 9
+#define VO_OUT 10
+
 volatile int xState;
 volatile int aState;
 volatile int bState;
@@ -19,6 +22,11 @@ void setup() {
   pinMode(A_OUT, OUTPUT);
   pinMode(B_IN, INPUT_PULLUP);
   pinMode(B_OUT, OUTPUT);
+
+  pinMode(GLOW_OUT, OUTPUT);
+  pinMode(VO_OUT, OUTPUT);
+
+
   Serial.begin(9600);
 
   attachInterrupt(digitalPinToInterrupt(X_IN), onX, RISING);
@@ -71,9 +79,19 @@ void loop() {
         Serial.println("J");
         break;
 
+      case 'V':  // enable both
+        Serial.println("V");
+        digitalWrite(VO_OUT, 1);
+        delay(5);
+        digitalWrite(VO_OUT, 0);
+        break;
+
       default:
         // ignore anything else
         break;
     }
   }
+  if(allowAB)   digitalWrite(GLOW_OUT, 1);
+  else digitalWrite(GLOW_OUT, 0);
+
 }

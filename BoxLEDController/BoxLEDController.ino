@@ -1,7 +1,7 @@
 #include <Adafruit_NeoPXL8.h>
 
-#define NUM_LEDS   150
-#define NUM_STRIPS 2
+#define NUM_LEDS   100
+#define NUM_STRIPS 3
 
 
 // Input pins
@@ -9,9 +9,23 @@
 #define PIN_TOP_PULSE     10
 #define PIN_BOTTOM_PULSE  11
 
+// Inputs
+#define PIN_AMB  5
+#define PIN_VO_PULSE      6  // momentary pulse when audio crosses threshold
+
+float led2Brightness = 0.0;     // current brightness (0–1)
+bool pulseActive = false;
+unsigned long pulseStart = 0;
+const unsigned long pulseDuration = 1000;  // ms
+const float glowBrightness = 0.3;          // 30%
+
 volatile bool triggerWaveFlag = false;
 volatile bool triggerTopFlag = false;
 volatile bool triggerBottomFlag = false;
+volatile bool triggerVOFlag = false;
+volatile bool turnOnAmb = false;
+volatile bool turnOffAmb = false;
+
 
 void onWaveTrigger() {
   triggerWaveFlag = true;
@@ -23,6 +37,18 @@ void onTopTrigger() {
 
 void onBottomTrigger() {
   triggerBottomFlag = true;
+}
+
+void onVOTrigger() {
+  triggerVOFlag = true;
+}
+
+void onAmbOn() {
+  turnOnAmb = true;
+}
+
+void onAmbOff() {
+  turnOffAmb = true;
 }
 
 // SCORPIO pins 0–7
@@ -111,8 +137,8 @@ private:
   Instance inst[MAX];
   int count = 0;
 
-  uint32_t delayBottom = 10; // ms
-  float decay = 200.0;      // ms
+  uint32_t delayBottom = 200; // ms
+  float decay = 800.0;      // ms
 
 public:
   void trigger(uint32_t now) override {
@@ -181,12 +207,13 @@ private:
   Instance inst[MAX];
   int count = 0;
 
-  int stripIndex;
-  uint32_t color;
-  uint32_t duration = 200;
 
 public:
   StripPulse(int strip, uint32_t c) : stripIndex(strip), color(c) {}
+  float brightnessFraction = 0.1;
+  uint32_t duration = 100;
+  uint32_t color;
+  int stripIndex;
 
   void trigger(uint32_t now) override {
     if (count >= MAX) return;
@@ -200,7 +227,7 @@ public:
       if (t > duration) continue;
       float brightness = exp(-t / 100.0);
       for (int i = 0; i < NUM_LEDS; i++)
-        addPixel(i, brightness*0.1);
+        addPixel(i, brightness*brightnessFraction);
     }
     cleanup(now);
   }
@@ -226,6 +253,45 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Smooth On/Off Glow Effect (inherits from StripPulse)
+// ---------------------------------------------------------------------------
+class StripGlow : public StripPulse {
+private:
+  bool targetOn = false;
+  float brightness = 0.0f;
+  float fadeSpeed = 0.02f; // rate per frame; smaller = slower
+  float maxFraction;
+
+public:
+  StripGlow(int strip, uint32_t c, float maxBright = 0.3f)
+    : StripPulse(strip, c), maxFraction(maxBright) {}
+
+  void on()  { targetOn = true; }
+  void off() { targetOn = false; }
+
+  void update(uint32_t now) override {
+    // smoothly approach target brightness
+    float target = targetOn ? maxFraction : 0.0f;
+    brightness += (target - brightness) * fadeSpeed;
+
+    if (brightness < 0.001f && !targetOn) brightness = 0; // cleanup small noise
+
+    // Apply brightness to all LEDs on the strip
+    for (int i = 0; i < NUM_LEDS; i++) {
+      uint8_t r = ((color >> 16) & 0xFF) * brightness;
+      uint8_t g = ((color >> 8) & 0xFF) * brightness;
+      uint8_t b = (color & 0xFF) * brightness;
+      leds.setPixelColor(stripIndex * NUM_LEDS + i, r, g, b);
+    }
+  }
+
+  bool isActive() const override {
+    // Consider active while glowing or fading
+    return (brightness > 0.001f) || targetOn;
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
 class EffectController {
@@ -234,13 +300,21 @@ private:
   GlobalPulse globalPulse;
   StripPulse topPulse;
   StripPulse bottomPulse;
+  StripPulse voPulse;
+  StripPulse amb;
 
 public:
   EffectController() :
+    amb(2, leds.Color(255, 255, 255)),
+    voPulse(2, leds.Color(255, 255, 255)),
     topPulse(0, leds.Color(255, 100, 0)),
     bottomPulse(1, leds.Color(255, 100, 0)) {}
 
   void begin() {
+    voPulse.brightnessFraction = 1;
+    voPulse.duration = 300;
+    amb.brightnessFraction = 1;
+    // amb.duration = 2000;
     leds.begin();
     leds.show();
   }
@@ -259,8 +333,8 @@ public:
       noInterrupts();
       triggerWaveFlag = false;
       interrupts();
-      Serial.println("X");
-      delay(5);
+      // Serial.println("X");
+      // delay(5);
       wave.trigger(now);
       // globalPulse.trigger(now);
     }
@@ -269,8 +343,8 @@ public:
       noInterrupts();
       triggerTopFlag = false;
       interrupts();
-      Serial.println("A");
-      delay(5);
+      // Serial.println("A");
+      // delay(5);
       topPulse.trigger(now);
     }
 
@@ -278,10 +352,33 @@ public:
       noInterrupts();
       triggerBottomFlag = false;
       interrupts();
-      Serial.println("B");
-      delay(5);
+      // Serial.println("B");
+      // delay(5);
       bottomPulse.trigger(now);
     }
+
+
+    if (triggerVOFlag){
+      noInterrupts();
+      triggerVOFlag = false;
+      interrupts();
+      // Serial.println("B");
+      // delay(5);
+      voPulse.trigger(now);
+    }
+
+    if(turnOnAmb){
+      noInterrupts();
+      turnOnAmb = false;
+      interrupts();
+      amb.trigger(now);
+    }
+    // if(turnOffAmb){
+    //   noInterrupts();
+    //   turnOffAmb = false;
+    //   interrupts();
+    //   amb.off();
+    // }
 
     // if (serialIn=="W"){
     //   Serial.println("W");
@@ -295,6 +392,8 @@ public:
     wave.update(now);
     topPulse.update(now);
     bottomPulse.update(now);
+    voPulse.update(now);
+    amb.update(now);
 
     leds.show();
   }
@@ -302,21 +401,32 @@ public:
 
 EffectController controller;
 
+StripGlow amb(2, leds.Color(255, 255, 255));
+
+
 // ---------------------------------------------------------------------------
 // Arduino Entry Points
 // ---------------------------------------------------------------------------
 void setup() {
   pinMode(PIN_TOP_PULSE, INPUT);
   pinMode(PIN_BOTTOM_PULSE, INPUT);
+  pinMode(PIN_TRIGGER_WAVE, INPUT);
+  pinMode(PIN_VO_PULSE, INPUT);
+  pinMode(PIN_AMB, INPUT);
   // pinMode(PIN_TRIGGER_WAVE, INPUT_PULLUP);
   // pinMode(PIN_TOP_PULSE, INPUT);
   // pinMode(PIN_BOTTOM_PULSE, INPUT);
-  pinMode(PIN_TRIGGER_WAVE, INPUT);
   // pinMode(PIN_TOP_PULSE, INPUT);
   // pinMode(PIN_BOTTOM_PULSE, INPUT);  
   attachInterrupt(digitalPinToInterrupt(PIN_TRIGGER_WAVE), onWaveTrigger, FALLING);
   attachInterrupt(digitalPinToInterrupt(PIN_TOP_PULSE), onTopTrigger, FALLING);
   attachInterrupt(digitalPinToInterrupt(PIN_BOTTOM_PULSE), onBottomTrigger, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_VO_PULSE), onVOTrigger, FALLING);
+  // attachInterrupt(digitalPinToInterrupt(PIN_AMB), onAmbOn, FALLING);
+  // attachInterrupt(digitalPinToInterrupt(PIN_AMB), onAmbOff, RISING);
+
+
+
   controller.begin();
   Serial.begin(9600);
   Serial.setTimeout(100);
@@ -328,12 +438,31 @@ void setup() {
   delay(5);
 
   digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(500);                // wait for a half second
+  delay(100);                // wait for a half second
   digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
 }
 
 void loop() {
+  uint32_t now = millis();
   controller.update();
+  // if(digitalRead(PIN_AMB)) amb.on();
+  // else amb.off();
+  // amb.update(now);
+  int stripIndex=2;
+  float brightnessFraction = 0.03;
+  if(digitalRead(PIN_AMB)){
+    for(int i=0; i<NUM_LEDS; i++){
+      leds.setPixelColor(stripIndex * NUM_LEDS + i,
+        leds.getPixelColor(stripIndex * NUM_LEDS + i) | leds.Color(255*brightnessFraction, 255*brightnessFraction, 255*brightnessFraction));
+    }
+  } else {
+    for(int i=0; i<NUM_LEDS; i++){
+      leds.setPixelColor(stripIndex * NUM_LEDS + i,
+        leds.getPixelColor(stripIndex * NUM_LEDS + i) | leds.Color(0,0,0));
+    }
+  }
+  leds.show();
+
   // if (!Serial||!Serial.dtr()){
   //   // Serial.end();
   //   // Serial.begin(9600);
@@ -356,19 +485,19 @@ void loop() {
   // }
 
 
-  if (millis() - lastSendTime > 100) {
-    if (Serial.dtr()) {          // Host is listening
-      Serial.println("PING");
-      lastSendTime = millis();
-    }
-  }
+  // if (millis() - lastSendTime > 100) {
+  //   if (Serial.dtr()) {          // Host is listening
+  //     Serial.println("PING");
+  //     lastSendTime = millis();
+  //   }
+  // }
 
-  // Check if host has stopped reading for too long
-  if (millis() - lastSendTime > timeout) {
-    // Reset USB CDC stack
-    Serial.end();
-    delay(50);
-    Serial.begin(9600);
-    lastSendTime = millis(); // reset timer
-  }
+  // // Check if host has stopped reading for too long
+  // if (millis() - lastSendTime > timeout) {
+  //   // Reset USB CDC stack
+  //   Serial.end();
+  //   delay(50);
+  //   Serial.begin(9600);
+  //   lastSendTime = millis(); // reset timer
+  // }
 }

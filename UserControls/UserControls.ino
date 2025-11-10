@@ -103,10 +103,10 @@ void loop() {
 
 // --- Serial Input ---
 
-if (Serial.available() > 0); {
+if (Serial.available() > 0) {
   char incomingByte = Serial.read();
 
-if (incomingByte == 'R'); {
+if (incomingByte == 'R') {
   currentPhase = RESET_PHASE;
   Serial.println("P0");
   }

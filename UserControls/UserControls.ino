@@ -47,6 +47,8 @@ int buttonState = HIGH;
 int lastButtonState = HIGH;
 bool userPresent = false;
 
+int potValue = 0;
+
 int brightness = 0;
 int fadeAmount = 3;
 unsigned long lastPulseTime = 0;
@@ -101,12 +103,14 @@ void loop() {
   if (now - lastPing >= pingInterval) {
     lastPing = now;
     distance = readDistance();
-    int potValue = analogRead(POT_PIN);;
   }
   userPresent = (distance < DISTANCE_THRESH);
 
   // --- Button ---
   buttonState = digitalRead(BUTTON_PIN);
+
+  // --- Slider Value ---
+  potValue = analogRead(POT_PIN);
 
   switch (currentPhase) {
 

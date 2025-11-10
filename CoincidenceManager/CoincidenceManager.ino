@@ -4,6 +4,7 @@
 #define X_OUT 8
 #define A_OUT 12
 #define B_OUT 13
+#define FILMRELAY_OUT 9
 
 volatile int xState;
 volatile int aState;
@@ -16,7 +17,10 @@ void setup() {
   pinMode(A_OUT, OUTPUT);
   pinMode(B_IN, INPUT_PULLUP);
   pinMode(B_OUT, OUTPUT);
+  pinMode(FILMRELAY_OUT, OUTPUT);
   Serial.begin(9600);
+
+  digitalWrite(FILMRELAY_OUT, HIGH);
 
   attachInterrupt(digitalPinToInterrupt(X_IN), onX, RISING);
   attachInterrupt(digitalPinToInterrupt(A_IN), onA, RISING);
@@ -24,9 +28,11 @@ void setup() {
 }
 
 void onX() {
+  digitalWrite(FILMRELAY_OUT, LOW);
   digitalWrite(X_OUT, 0);
   Serial.println("X");
   digitalWrite(X_OUT, 1);
+  digitalWrite(FILMRELAY_OUT, HIGH);
   xState = 0;
 }
 void onA() {

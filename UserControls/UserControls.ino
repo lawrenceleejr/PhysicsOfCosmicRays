@@ -1,27 +1,25 @@
 #include <Adafruit_NeoPixel.h>
 
-// ---------------------------
-// Pin Definitions
-// ---------------------------
-#define RING_RGB_PIN   6
-#define RING_RGBW_PIN  7
-#define NUM_LEDS       24
-#define BUTTON_PIN     2
-#define POT_PIN        A0
-#define SPOTLIGHT      8
-#define DIST_SENSOR_PIN A1
+// --- Pin assignments ---
+#define BUTTON_PIN 2
+#define RGBW_PIN   11
+#define RGB_PIN    12
+#define PIN3       6   // check please !!
+#define PIN4       7   
+#define TRIGPIN    9
+#define ECHOPIN    10
+#define POT_PIN    A2  // Potentiometer
 
-// ---------------------------
-// LED Rings
-// ---------------------------
+// --- Config ---
+#define NUM_LEDS        24
+#define DISTANCE_THRESH 75   // cm
+#define INACTIVITY_TIME 5000 // ms before reset if user leaves
+#define HOLD_BLUE_TIME  30000 // ms hold blue before fading red
+#define PULSE_DELAY     10
+#define ORB_TRAIL_LENGTH 5
+#define ORB_DELAY 50
 
-Adafruit_NeoPixel ringRGB(NUM_LEDS, RING_RGB_PIN, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel ringRGBW(NUM_LEDS, RING_RGBW_PIN, NEO_GRBW + NEO_KHZ800);
-
-// ---------------------------
-// Phase States
-// ---------------------------
-
+// --- Phases ---
 enum Phase {
   RESET_PHASE,
   PHASE_ONE,
@@ -32,173 +30,167 @@ enum Phase {
 
 Phase currentPhase = RESET_PHASE;
 
-// ---------------------------
-// Timing and Animation Control
-// ---------------------------
-unsigned long now = 0;
-unsigned long lastPulseTime = 0;
+// --- NeoPixels ---
+Adafruit_NeoPixel ringRGBW(NUM_LEDS, RGBW_PIN, NEO_GRBW + NEO_KHZ800);
+Adafruit_NeoPixel ringRGB(NUM_LEDS,  RGB_PIN,  NEO_GRB  + NEO_KHZ800);
+
+// --- Timers & Variables ---
 unsigned long lastInteractionTime = 0;
-unsigned long phaseStartTime = 0;
+unsigned long now = 0;
+
+int distance = 9999;
+unsigned long lastPing = 0;
+const unsigned long pingInterval = 100;
+
+int buttonState = HIGH;
+int lastButtonState = HIGH;
+bool userPresent = false;
 
 int brightness = 0;
 int fadeAmount = 3;
+unsigned long lastPulseTime = 0;
+
 bool blueInitialized = false;
 bool redLocked = false;
+unsigned long phaseStartTime = 0;
 
-const unsigned long PULSE_DELAY = 20;
-const unsigned long INACTIVITY_TIME = 5000;
-const unsigned long HOLD_RED_DELAY = 3000;
-const unsigned long FADE_TIME = 4000;
+int orbPosition = 0;
+uint16_t hue = 0;
 
-// Rainbow orb constants
-#define ORB_TRAIL_LENGTH 5
-#define ORB_DELAY 50
-
-// ---------------------------
-// Utility Functions
-// ---------------------------
-void turnOffAll() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    ringRGB.setPixelColor(i, 0);
-    ringRGBW.setPixelColor(i, 0);
-  }
-  ringRGB.show();
-  ringRGBW.show();
-  digitalWrite(SPOTLIGHT, HIGH); // Spotlight off
-}
-
-void setAllColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0) {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    ringRGB.setPixelColor(i, ringRGB.Color(r, g, b));
-    ringRGBW.setPixelColor(i, ringRGBW.Color(r, g, b, w));
-  }
-  ringRGB.show();
-  ringRGBW.show();
-}
-
-int smoothAnalogRead(int pin) {
-  const int samples = 10;
-  long total = 0;
-  for (int i = 0; i < samples; i++) {
-    total += analogRead(pin);
-    delay(2);
-  }
-  return total / samples;
-}
-
-// ---------------------------
-// Setup
-// ---------------------------
+// -------------------------------
+// SETUP
+// -------------------------------
 void setup() {
-  Serial.begin(9600);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(SPOTLIGHT, OUTPUT);
-  digitalWrite(SPOTLIGHT, HIGH); // OFF
+  pinMode(PIN3, OUTPUT);
+  pinMode(PIN4, OUTPUT);
+  digitalWrite(PIN4, HIGH); // Relay idle HIGH (off)
 
-  ringRGB.begin();
   ringRGBW.begin();
-  turnOffAll();
+  ringRGB.begin();
+  ringRGBW.show();
+  ringRGB.show();
 
-  Serial.println("P0");
+  pinMode(TRIGPIN, OUTPUT);
+  pinMode(ECHOPIN, INPUT);
+  pinMode(POT_PIN, INPUT);
+
+  Serial.begin(9600);
 }
 
-// ---------------------------
-// Main Loop
-// ---------------------------
+// -------------------- LOOP --------------------
 void loop() {
   now = millis();
 
-  // Read inputs
-  int buttonState = digitalRead(BUTTON_PIN);
-  static int lastButtonState = HIGH;
-  int potValue = smoothAnalogRead(POT_PIN);
-  int distanceValue = smoothAnalogRead(DIST_SENSOR_PIN);
-  bool userPresent = (distanceValue < 300); // Adjust for your sensor range
+  // --- Distance update ---
+  if (now - lastPing >= pingInterval) {
+    lastPing = now;
+    distance = readDistance();
+    int potValue = analogRead(POT_PIN);
+    Serial.print("D:");
+    Serial.print(distance);
+    Serial.print("cm  ");
+    Serial.print("POT:");
+    Serial.println(potValue);
+  }
+  userPresent = (distance < DISTANCE_THRESH);
 
-  // --- Telemetry line ---
-  Serial.print(buttonState);
-  Serial.print(",");
-  Serial.print(potValue);
-  Serial.print(",");
-  Serial.println(distanceValue);
+  // --- Button ---
+  buttonState = digitalRead(BUTTON_PIN);
 
-  // ---------------------------
-  // Phase Control Logic
-  // ---------------------------
   switch (currentPhase) {
 
-    // ---------- RESET PHASE ----------
+    // =================================================
+    // RESET PHASE (idle state, everything off)
+    // =================================================
     case RESET_PHASE:
       turnOffAll();
-      redLocked = false;
       blueInitialized = false;
+      redLocked = false;
+
       if (userPresent) {
         currentPhase = PHASE_ONE;
         brightness = 0;
         fadeAmount = 3;
         lastPulseTime = now;
+        lastInteractionTime = now;
         Serial.println("P1");
       }
       break;
 
-    // ---------- PHASE ONE ----------
+    // =================================================
+    // PHASE ONE (pulsing blue + spotlight on)
+    // =================================================
     case PHASE_ONE:
-      // Pulse blue
+      digitalWrite(PIN4, LOW); // Spotlight ON
+
       if (now - lastPulseTime >= PULSE_DELAY) {
         lastPulseTime = now;
         brightness += fadeAmount;
         if (brightness <= 0 || brightness >= 255) fadeAmount = -fadeAmount;
-        setAllColor(0, 0, brightness, brightness / 10);
+        setAllColor(0, 0, brightness, brightness / 5); // blue pulse
       }
+
+      if (userPresent) lastInteractionTime = now;
+
+      // --- Button pressed: advance to PHASE TWO ---
+      if (buttonState == LOW && lastButtonState == HIGH) {
+        currentPhase = PHASE_TWO;
+        phaseStartTime = now;
+        Serial.println("P2");
+      }
+
+      // --- Reset if user leaves ---
       if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
         currentPhase = RESET_PHASE;
         Serial.println("P0");
-      }
-      if (buttonState == LOW && lastButtonState == HIGH) {
-        currentPhase = PHASE_TWO;
-        Serial.println("P2");
       }
       break;
 
-    // ---------- PHASE TWO ----------
+    // =================================================
+    // PHASE TWO (solid green)
+    // =================================================
     case PHASE_TWO:
+      digitalWrite(PIN4, LOW);
       setAllColor(0, 255, 0, 0); // solid green
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
-        currentPhase = RESET_PHASE;
-        Serial.println("P0");
-      }
+
+      if (userPresent) lastInteractionTime = now;
+
+      // --- Button pressed: advance to PHASE THREE ---
       if (buttonState == LOW && lastButtonState == HIGH) {
         currentPhase = PHASE_THREE;
         Serial.println("P3");
       }
+
+      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
+        currentPhase = RESET_PHASE;
+        Serial.println("P0");
+      }
       break;
 
-    // ---------- PHASE THREE (RAINBOW ORB) ----------
+    // =================================================
+    // PHASE THREE (rainbow orb animation)
+    // =================================================
     case PHASE_THREE:
-    {
-      static int orbPosition = 0;
-      static uint16_t hue = 0;
+      digitalWrite(PIN4, LOW); // Spotlight stays ON
 
       if (now - lastPulseTime >= ORB_DELAY) {
         lastPulseTime = now;
-        hue += 256; // rainbow cycle speed
+        hue += 256;
         if (hue > 65535) hue = 0;
 
-        // Clear LEDs
         for (int i = 0; i < NUM_LEDS; i++) {
           ringRGB.setPixelColor(i, 0);
           ringRGBW.setPixelColor(i, 0);
         }
 
-        // Draw orb + fading trail
         for (int t = 0; t < ORB_TRAIL_LENGTH; t++) {
           int index = (orbPosition - t + NUM_LEDS) % NUM_LEDS;
           float fadeFactor = 1.0 - (float)t / ORB_TRAIL_LENGTH;
           uint32_t color = ringRGB.ColorHSV(hue, 255, uint8_t(255 * fadeFactor));
-          uint8_t r = (uint8_t)(color >> 16);
-          uint8_t g = (uint8_t)(color >> 8);
-          uint8_t b = (uint8_t)(color);
-
+          uint8_t r = (color >> 16) & 0xFF;
+          uint8_t g = (color >> 8) & 0xFF;
+          uint8_t b = color & 0xFF;
           ringRGB.setPixelColor(index, r, g, b);
           ringRGBW.setPixelColor(index, r, g, b, 0);
         }
@@ -208,56 +200,43 @@ void loop() {
         orbPosition = (orbPosition + 1) % NUM_LEDS;
       }
 
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
-        currentPhase = RESET_PHASE;
-        Serial.println("P0");
-      }
+      if (userPresent) lastInteractionTime = now;
 
-      // Button press → next phase
+      // --- Button pressed: advance to PHASE FOUR ---
       if (buttonState == LOW && lastButtonState == HIGH) {
         currentPhase = PHASE_FOUR;
-        phaseStartTime = now;
         Serial.println("P4");
       }
-    }
-    break;
-
-    // ---------- PHASE FOUR ----------
-    case PHASE_FOUR:
-      digitalWrite(SPOTLIGHT, LOW); // Spotlight ON
-
-      if (!blueInitialized) {
-        phaseStartTime = now;
-        blueInitialized = true;
-      }
-
-      // Blue → red fade
-      uint8_t r = 0, g = 0, b = 255;
-      if (now - phaseStartTime >= HOLD_RED_DELAY) {
-        float progress = float(now - (phaseStartTime + HOLD_RED_DELAY)) / FADE_TIME;
-        if (progress > 1.0) progress = 1.0;
-        r = uint8_t(255 * progress);
-        g = 0;
-        b = uint8_t(255 * (1.0 - progress));
-      }
-
-      // Pot controls brightness
-      int scaledBrightness = map(potValue, 20, 1023, 255, 0);
-      ringRGB.setBrightness(scaledBrightness);
-      ringRGBW.setBrightness(scaledBrightness);
-
-      for (int i = 0; i < NUM_LEDS; i++) {
-        ringRGB.setPixelColor(i, ringRGB.Color(r, g, b));
-        ringRGBW.setPixelColor(i, ringRGBW.Color(r, g, b, 0));
-      }
-      ringRGB.show();
-      ringRGBW.show();
 
       if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
         currentPhase = RESET_PHASE;
         Serial.println("P0");
       }
+      break;
+
+    // =================================================
+    // PHASE FOUR (solid blue → fade to red → lock red)
+    // =================================================
+    case PHASE_FOUR:
+      digitalWrite(PIN4, LOW);
+
+      if (!blueInitialized) {
+        setAllColor(0, 0, 255, 0);
+        blueInitialized = true;
+        phaseStartTime = now;
+      }
+
+      if (!redLocked && now - phaseStartTime > HOLD_BLUE_TIME) {
+        fadeColor(0, 0, 255, 255, 0, 0, 2000, 20);
+        redLocked = true;
+      }
+
       if (buttonState == LOW && lastButtonState == HIGH) {
+        currentPhase = PHASE_FOUR;
+        Serial.println("P4");
+      }
+
+      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
         currentPhase = RESET_PHASE;
         Serial.println("P0");
       }
@@ -265,4 +244,49 @@ void loop() {
   }
 
   lastButtonState = buttonState;
+}
+
+// -------------------- FUNCTIONS --------------------
+
+int readDistance() {
+  digitalWrite(TRIGPIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIGPIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGPIN, LOW);
+  long duration = pulseIn(ECHOPIN, HIGH, 30000);
+  int cm = duration * 0.034 / 2;
+  return cm > 0 ? cm : 9999;
+}
+
+void turnOffAll() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    ringRGB.setPixelColor(i, 0, 0, 0);
+    ringRGBW.setPixelColor(i, 0, 0, 0, 0);
+  }
+  ringRGB.show();
+  ringRGBW.show();
+  digitalWrite(PIN4, HIGH);
+}
+
+void setAllColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    ringRGB.setPixelColor(i, ringRGB.Color(r, g, b));
+    ringRGBW.setPixelColor(i, ringRGBW.Color(r, g, b, w));
+  }
+  ringRGB.show();
+  ringRGBW.show();
+}
+
+void fadeColor(uint8_t r1, uint8_t g1, uint8_t b1,
+               uint8_t r2, uint8_t g2, uint8_t b2,
+               int duration, int stepDelay) {
+  int steps = duration / stepDelay;
+  for (int i = 0; i <= steps; i++) {
+    uint8_t r = r1 + (r2 - r1) * i / steps;
+    uint8_t g = g1 + (g2 - g1) * i / steps;
+    uint8_t b = b1 + (b2 - b1) * i / steps;
+    setAllColor(r, g, b, 0);
+    delay(stepDelay);
+  }
 }

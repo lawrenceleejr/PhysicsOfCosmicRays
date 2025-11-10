@@ -4,7 +4,7 @@
 #define BUTTON_PIN 2
 #define RGBW_PIN   11
 #define RGB_PIN    12
-#define PIN3       6   // check please !!
+#define PIN3       6   // check please !! spotlight/opacity film for pin3/pin4
 #define PIN4       7   
 #define TRIGPIN    9
 #define ECHOPIN    10
@@ -82,16 +82,25 @@ void setup() {
 void loop() {
   now = millis();
 
+  Serial.print(buttonState);
+  Serial.print(",");
+  Serial.print(potValue);
+  Serial.print(",");
+  Serial.println(distance);
+
+// --- Serial Command Input ---
+  if (Serial.available() > 0) {          
+    char incomingByte = Serial.read();
+  if (incomingByte == 'R') {          
+    currentPhase = RESET_PHASE;
+    Serial.println("P0");
+  }
+
   // --- Distance update ---
   if (now - lastPing >= pingInterval) {
     lastPing = now;
     distance = readDistance();
-    int potValue = analogRead(POT_PIN);
-    Serial.print("D:");
-    Serial.print(distance);
-    Serial.print("cm  ");
-    Serial.print("POT:");
-    Serial.println(potValue);
+    int potValue = analogRead(POT_PIN);;
   }
   userPresent = (distance < DISTANCE_THRESH);
 

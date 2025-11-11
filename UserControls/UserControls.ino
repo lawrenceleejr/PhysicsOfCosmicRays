@@ -4,8 +4,7 @@
 #define BUTTON_PIN 2
 #define RGBW_PIN   11
 #define RGB_PIN    12
-#define PIN3       6   // check please !! spotlight/opacity film for pin3/pin4
-#define PIN4       7   
+#define SPOTLIGHTPIN       7   
 #define TRIGPIN    9
 #define ECHOPIN    10
 #define POT_PIN    A2  // Potentiometer
@@ -18,6 +17,7 @@
 #define PULSE_DELAY     10
 #define ORB_TRAIL_LENGTH 5
 #define ORB_DELAY 50
+#define SPOTLIGHT_DELAY 15000 // 15s
 
 // --- Phases ---
 enum Phase {
@@ -25,7 +25,8 @@ enum Phase {
   PHASE_ONE,
   PHASE_TWO,
   PHASE_THREE,
-  PHASE_FOUR
+  PHASE_FOUR,
+  PHASE_FIVE
 };
 
 Phase currentPhase = RESET_PHASE;
@@ -46,6 +47,8 @@ int buttonState = HIGH;
 int lastButtonState = HIGH;
 bool userPresent = false;
 
+int potValue = 0;
+
 int brightness = 0;
 int fadeAmount = 3;
 unsigned long lastPulseTime = 0;
@@ -62,9 +65,8 @@ uint16_t hue = 0;
 // -------------------------------
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(PIN3, OUTPUT);
-  pinMode(PIN4, OUTPUT);
-  digitalWrite(PIN4, HIGH); // Relay idle HIGH (off)
+  pinMode(SPOTLIGHTPIN, OUTPUT);
+  digitalWrite(SPOTLIGHTPIN, HIGH); // Relay idle HIGH (off)
 
   ringRGBW.begin();
   ringRGB.begin();
@@ -88,24 +90,27 @@ void loop() {
   Serial.print(",");
   Serial.println(distance);
 
-// --- Serial Command Input ---
+  // --- Serial Command Input ---
   if (Serial.available() > 0) {          
     char incomingByte = Serial.read();
-  if (incomingByte == 'R') {          
-    currentPhase = RESET_PHASE;
-    Serial.println("P0");
+    if (incomingByte == 'R') {          
+      currentPhase = RESET_PHASE;
+      Serial.println("P0");
+    }
   }
 
   // --- Distance update ---
   if (now - lastPing >= pingInterval) {
     lastPing = now;
     distance = readDistance();
-    int potValue = analogRead(POT_PIN);;
   }
   userPresent = (distance < DISTANCE_THRESH);
 
   // --- Button ---
   buttonState = digitalRead(BUTTON_PIN);
+
+  // --- Slider Value ---
+  potValue = analogRead(POT_PIN);
 
   switch (currentPhase) {
 
@@ -125,13 +130,14 @@ void loop() {
         lastInteractionTime = now;
         Serial.println("P1");
       }
+
       break;
 
     // =================================================
     // PHASE ONE (pulsing blue + spotlight on)
     // =================================================
     case PHASE_ONE:
-      digitalWrite(PIN4, LOW); // Spotlight ON
+      digitalWrite(SPOTLIGHTPIN, HIGH); // Spotlight OFF
 
       if (now - lastPulseTime >= PULSE_DELAY) {
         lastPulseTime = now;
@@ -149,18 +155,13 @@ void loop() {
         Serial.println("P2");
       }
 
-      // --- Reset if user leaves ---
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
-        currentPhase = RESET_PHASE;
-        Serial.println("P0");
-      }
       break;
 
     // =================================================
     // PHASE TWO (solid green)
     // =================================================
     case PHASE_TWO:
-      digitalWrite(PIN4, LOW);
+      digitalWrite(SPOTLIGHTPIN, HIGH);
       setAllColor(0, 255, 0, 0); // solid green
 
       if (userPresent) lastInteractionTime = now;
@@ -168,66 +169,65 @@ void loop() {
       // --- Button pressed: advance to PHASE THREE ---
       if (buttonState == LOW && lastButtonState == HIGH) {
         currentPhase = PHASE_THREE;
+        phaseStartTime = now;
         Serial.println("P3");
       }
 
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
-        currentPhase = RESET_PHASE;
-        Serial.println("P0");
-      }
       break;
 
     // =================================================
     // PHASE THREE (rainbow orb animation)
     // =================================================
     case PHASE_THREE:
-      digitalWrite(PIN4, LOW); // Spotlight stays ON
-
-      if (now - lastPulseTime >= ORB_DELAY) {
-        lastPulseTime = now;
-        hue += 256;
-        if (hue > 65535) hue = 0;
-
-        for (int i = 0; i < NUM_LEDS; i++) {
-          ringRGB.setPixelColor(i, 0);
-          ringRGBW.setPixelColor(i, 0);
-        }
-
-        for (int t = 0; t < ORB_TRAIL_LENGTH; t++) {
-          int index = (orbPosition - t + NUM_LEDS) % NUM_LEDS;
-          float fadeFactor = 1.0 - (float)t / ORB_TRAIL_LENGTH;
-          uint32_t color = ringRGB.ColorHSV(hue, 255, uint8_t(255 * fadeFactor));
-          uint8_t r = (color >> 16) & 0xFF;
-          uint8_t g = (color >> 8) & 0xFF;
-          uint8_t b = color & 0xFF;
-          ringRGB.setPixelColor(index, r, g, b);
-          ringRGBW.setPixelColor(index, r, g, b, 0);
-        }
-
-        ringRGB.show();
-        ringRGBW.show();
-        orbPosition = (orbPosition + 1) % NUM_LEDS;
+      if (now - phaseStartTime > SPOTLIGHT_DELAY){ // Time to let narration go before turning on the spotlight dramatically
+        digitalWrite(SPOTLIGHTPIN, LOW); // Spotlight turns ON
       }
+
+      setAllColor(155, 0, 255, 255); // solid white
+
+      // LL thinks this isn't doing what you think it is. It's changing the hue by 256 every ORB_DELAY. (50 ms). I think this is the crazy christmas lights effect you were seeing. 
+      // if (now - lastPulseTime >= ORB_DELAY) {
+      //   lastPulseTime = now;
+      //   hue += 256;
+      //   if (hue > 65535) hue = 0;
+
+      //   for (int i = 0; i < NUM_LEDS; i++) {
+      //     ringRGB.setPixelColor(i, 0);
+      //     ringRGBW.setPixelColor(i, 0);
+      //   }
+
+      //   for (int t = 0; t < ORB_TRAIL_LENGTH; t++) {
+      //     int index = (orbPosition - t + NUM_LEDS) % NUM_LEDS;
+      //     float fadeFactor = 1.0 - (float)t / ORB_TRAIL_LENGTH;
+      //     uint32_t color = ringRGB.ColorHSV(hue, 255, uint8_t(255 * fadeFactor));
+      //     uint8_t r = (color >> 16) & 0xFF;
+      //     uint8_t g = (color >> 8) & 0xFF;
+      //     uint8_t b = color & 0xFF;
+      //     ringRGB.setPixelColor(index, r, g, b);
+      //     ringRGBW.setPixelColor(index, r, g, b, 0);
+      //   }
+
+      //   ringRGB.show();
+      //   ringRGBW.show();
+      //   orbPosition = (orbPosition + 1) % NUM_LEDS;
+      // }
 
       if (userPresent) lastInteractionTime = now;
 
       // --- Button pressed: advance to PHASE FOUR ---
       if (buttonState == LOW && lastButtonState == HIGH) {
         currentPhase = PHASE_FOUR;
+        phaseStartTime = now;
         Serial.println("P4");
       }
 
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
-        currentPhase = RESET_PHASE;
-        Serial.println("P0");
-      }
       break;
 
     // =================================================
     // PHASE FOUR (solid blue → fade to red → lock red)
     // =================================================
     case PHASE_FOUR:
-      digitalWrite(PIN4, LOW);
+      digitalWrite(SPOTLIGHTPIN, LOW);
 
       if (!blueInitialized) {
         setAllColor(0, 0, 255, 0);
@@ -241,18 +241,38 @@ void loop() {
       }
 
       if (buttonState == LOW && lastButtonState == HIGH) {
-        currentPhase = PHASE_FOUR;
-        Serial.println("P4");
+        currentPhase = PHASE_FIVE;
+        Serial.println("P5");
       }
 
-      if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
+      break;
+
+    case PHASE_FIVE:
+      digitalWrite(SPOTLIGHTPIN, HIGH); // Turn off spotlight
+
+      if (now - lastPulseTime >= PULSE_DELAY) {
+        lastPulseTime = now;
+        brightness -= 2;
+        if (brightness >= 100) setAllColor(0, 0, brightness, brightness / 5); // blue fade out to dim
+      }
+
+      if (buttonState == LOW && lastButtonState == HIGH) {
         currentPhase = RESET_PHASE;
         Serial.println("P0");
       }
+
       break;
   }
 
   lastButtonState = buttonState;
+
+  // --- Reset if user leaves ---
+  if (!userPresent && now - lastInteractionTime > INACTIVITY_TIME) {
+    currentPhase = RESET_PHASE;
+    Serial.println("P0");
+  }
+
+  return;
 }
 
 // -------------------- FUNCTIONS --------------------
@@ -275,7 +295,7 @@ void turnOffAll() {
   }
   ringRGB.show();
   ringRGBW.show();
-  digitalWrite(PIN4, HIGH);
+  digitalWrite(SPOTLIGHTPIN, HIGH);
 }
 
 void setAllColor(uint8_t r, uint8_t g, uint8_t b, uint8_t w) {

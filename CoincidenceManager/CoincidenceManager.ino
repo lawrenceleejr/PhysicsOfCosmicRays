@@ -5,6 +5,7 @@
 #define A_OUT 12
 #define B_OUT 13
 
+#define FILMRELAY_OUT 6
 #define GLOW_OUT 9
 #define VO_OUT 10
 
@@ -15,6 +16,8 @@ volatile int bState;
 int allowAB = true;
 int allowX = true;
 
+int flashFilmNow = false;
+
 void setup() {
   pinMode(X_IN, INPUT_PULLUP);
   pinMode(X_OUT, OUTPUT);
@@ -22,24 +25,38 @@ void setup() {
   pinMode(A_OUT, OUTPUT);
   pinMode(B_IN, INPUT_PULLUP);
   pinMode(B_OUT, OUTPUT);
-
+  
+  pinMode(FILMRELAY_OUT, OUTPUT);
   pinMode(GLOW_OUT, OUTPUT);
   pinMode(VO_OUT, OUTPUT);
 
-
   Serial.begin(9600);
+
+  digitalWrite(FILMRELAY_OUT, HIGH);
+
+  flashFilm();
 
   attachInterrupt(digitalPinToInterrupt(X_IN), onX, RISING);
   attachInterrupt(digitalPinToInterrupt(A_IN), onA, RISING);
   attachInterrupt(digitalPinToInterrupt(B_IN), onB, RISING);
 }
 
+void flashFilm(){
+  digitalWrite(FILMRELAY_OUT, LOW);
+  delay(10);
+  digitalWrite(FILMRELAY_OUT, HIGH);
+}
+
 void onX() {
   if (!allowX) return;
+  // digitalWrite(FILMRELAY_OUT, LOW);
   digitalWrite(X_OUT, 0);
   Serial.println("X");
   digitalWrite(X_OUT, 1);
+  flashFilm();
+  // digitalWrite(FILMRELAY_OUT, LOW);
   xState = 0;
+  flashFilmNow = true;
 }
 void onA() {
   if (!allowAB) return;
@@ -53,6 +70,7 @@ void onB() {
   digitalWrite(B_OUT, 0);
   Serial.println("B");
   digitalWrite(B_OUT, 1);
+    // flashFilm();
   bState = 0;
 }
 
@@ -94,4 +112,8 @@ void loop() {
   if(allowAB)   digitalWrite(GLOW_OUT, 1);
   else digitalWrite(GLOW_OUT, 0);
 
+  if(flashFilmNow){
+    flashFilm();
+    flashFilmNow = false;
+  }
 }

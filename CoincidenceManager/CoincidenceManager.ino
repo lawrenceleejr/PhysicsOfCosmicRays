@@ -51,7 +51,7 @@ void onX() {
   if (!allowX) return;
   // digitalWrite(FILMRELAY_OUT, LOW);
   digitalWrite(X_OUT, 0);
-  Serial.println("X2");
+  Serial.println("X");
   digitalWrite(X_OUT, 1);
   flashFilm();
   // digitalWrite(FILMRELAY_OUT, LOW);

@@ -183,7 +183,7 @@ void loop() {
         digitalWrite(SPOTLIGHTPIN, LOW); // Spotlight turns ON
       }
 
-      setAllColor(255, 255, 255, 255); // solid white
+      setAllColor(155, 0, 255, 255); // solid white
 
       // LL thinks this isn't doing what you think it is. It's changing the hue by 256 every ORB_DELAY. (50 ms). I think this is the crazy christmas lights effect you were seeing. 
       // if (now - lastPulseTime >= ORB_DELAY) {

@@ -4,8 +4,8 @@
 #define X_OUT 8
 #define A_OUT 12
 #define B_OUT 13
-#define FILMRELAY_OUT 9
 
+#define FILMRELAY_OUT 11
 #define GLOW_OUT 9
 #define VO_OUT 10
 

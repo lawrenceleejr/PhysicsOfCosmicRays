@@ -1,0 +1,1 @@
+ffmpeg -i output.mp4 -ss 5 -i 803852__sanderboah__rocket-launch.wav -map 0:v -map 1:a -c:v copy -c:a aac -shortest Supernova_Wide.mp4

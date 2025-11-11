@@ -97,6 +97,10 @@ void loop() {
       currentPhase = RESET_PHASE;
       Serial.println("P0");
     }
+    if (incomingByte == 'X' && currentPhase==PHASE_FOUR) {          
+      digitalWrite(SPOTLIGHTPIN, HIGH);
+      delay(50);
+    }
   }
 
   // --- Distance update ---

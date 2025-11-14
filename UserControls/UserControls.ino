@@ -17,7 +17,7 @@
 #define PULSE_DELAY     10
 #define ORB_TRAIL_LENGTH 5
 #define ORB_DELAY 50
-#define SPOTLIGHT_DELAY 15000 // 15s
+#define SPOTLIGHT_DELAY 63000 // 63s, timed with narration
 
 // --- Phases ---
 enum Phase {

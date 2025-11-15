@@ -17,7 +17,7 @@
 #define PULSE_DELAY     10
 #define ORB_TRAIL_LENGTH 5
 #define ORB_DELAY 50
-#define SPOTLIGHT_DELAY 63000 // 63s, timed with narration
+#define SPOTLIGHT_DELAY 63000 // 63s
 
 // --- Phases ---
 enum Phase {
@@ -153,7 +153,7 @@ void loop() {
       if (userPresent) lastInteractionTime = now;
 
       // --- Button pressed: advance to PHASE TWO ---
-      if (buttonState == LOW && lastButtonState == HIGH) {
+      if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+2000) {
         currentPhase = PHASE_TWO;
         phaseStartTime = now;
         Serial.println("P2");
@@ -171,7 +171,7 @@ void loop() {
       if (userPresent) lastInteractionTime = now;
 
       // --- Button pressed: advance to PHASE THREE ---
-      if (buttonState == LOW && lastButtonState == HIGH) {
+      if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+500) {
         currentPhase = PHASE_THREE;
         phaseStartTime = now;
         Serial.println("P3");
@@ -219,7 +219,7 @@ void loop() {
       if (userPresent) lastInteractionTime = now;
 
       // --- Button pressed: advance to PHASE FOUR ---
-      if (buttonState == LOW && lastButtonState == HIGH) {
+      if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+500) {
         currentPhase = PHASE_FOUR;
         phaseStartTime = now;
         Serial.println("P4");
@@ -244,7 +244,7 @@ void loop() {
         redLocked = true;
       }
 
-      if (buttonState == LOW && lastButtonState == HIGH) {
+      if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+500) {
         currentPhase = PHASE_FIVE;
         Serial.println("P5");
       }
@@ -260,7 +260,7 @@ void loop() {
         if (brightness >= 100) setAllColor(0, 0, brightness, brightness / 5); // blue fade out to dim
       }
 
-      if (buttonState == LOW && lastButtonState == HIGH) {
+      if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+500) {
         currentPhase = RESET_PHASE;
         Serial.println("P0");
       }

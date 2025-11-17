@@ -97,10 +97,14 @@ void loop() {
       currentPhase = RESET_PHASE;
       Serial.println("P0");
     }
-    if (incomingByte == 'X' && currentPhase==PHASE_FOUR) {          
-      digitalWrite(SPOTLIGHTPIN, HIGH);
-      delay(50);
-    }
+    // if (incomingByte == 'X' && currentPhase==PHASE_FOUR) {          
+    //   digitalWrite(SPOTLIGHTPIN, HIGH);
+    //   delay(50);
+    // }
+    // if (incomingByte == 'V') {          
+    //   digitalWrite(SPOTLIGHTPIN, HIGH);
+    //   delay(50);
+    // }
   }
 
   // --- Distance update ---
@@ -231,7 +235,7 @@ void loop() {
     // PHASE FOUR (solid blue → fade to red → lock red)
     // =================================================
     case PHASE_FOUR:
-      digitalWrite(SPOTLIGHTPIN, LOW);
+      digitalWrite(SPOTLIGHTPIN, HIGH); // Turn off spotlight
 
       if (!blueInitialized) {
         setAllColor(0, 0, 255, 0);
@@ -254,11 +258,11 @@ void loop() {
     case PHASE_FIVE:
       digitalWrite(SPOTLIGHTPIN, HIGH); // Turn off spotlight
 
-      if (now - lastPulseTime >= PULSE_DELAY) {
-        lastPulseTime = now;
-        brightness -= 2;
-        if (brightness >= 100) setAllColor(0, 0, brightness, brightness / 5); // blue fade out to dim
-      }
+      // if (now - lastPulseTime >= PULSE_DELAY) {
+      //   lastPulseTime = now;
+      brightness -= 1;
+      if(brightness>-1) setAllColor(0, 0, brightness, brightness / 5); // blue fade out to dim
+      // }
 
       if (buttonState == LOW && lastButtonState == HIGH && now>phaseStartTime+500) {
         currentPhase = RESET_PHASE;

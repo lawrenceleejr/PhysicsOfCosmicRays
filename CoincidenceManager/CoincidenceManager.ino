@@ -43,7 +43,7 @@ void setup() {
 
 void flashFilm(){
   digitalWrite(FILMRELAY_OUT, LOW);
-  delay(10);
+  delay(100);
   digitalWrite(FILMRELAY_OUT, HIGH);
 }
 

@@ -1,0 +1,12 @@
+Projector Setup:
+Projectors are labeled TD: 0, 1, 2
+•	Plug in order:
+	TD: 0
+	TD: 1 and TD: 2 Splitter
+	Plug in (Not)Laptop last
+•	Window Order in TouchDesigner: Top to bottom (Not needed - just in case)
+	1
+	2
+	0
+
+Turn Mac On
